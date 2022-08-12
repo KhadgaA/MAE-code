@@ -132,10 +132,10 @@ def default_args(data_name, trail=0):
     args.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     # data
-    args.data_dir = 'data'
+    args.data_dir = '../KDGen/data/'
     args.data_name = data_name
     args.image_size = 256
-    args.n_worker = 8
+    args.n_worker = 2
 
     # model
     # - use ViT-Base whose parameters are referred from "Dosovitskiy et al. An Image is Worth 16x16 Words: Transformers
@@ -150,7 +150,7 @@ def default_args(data_name, trail=0):
     args.decoder_depth = 8  # paper showed good results with 8
 
     # train
-    args.batch_size = 4096
+    args.batch_size = 4096//16
     args.epochs = 800
     args.base_lr = 1.5e-4
     args.lr = args.base_lr * args.batch_size / 256
@@ -181,5 +181,5 @@ def default_args(data_name, trail=0):
 
 if __name__ == '__main__':
 
-    data_name = 'imagenet'
+    data_name = 'cifar10'
     train(default_args(data_name))
