@@ -4,11 +4,13 @@ Homepage: https://liujiyuan13.github.io.
 Email: liujiyuan13@163.com.
 All rights reserved.
 '''
-
+import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
-from einops import repeat
+
+from einops import rearrange, repeat
+from einops.layers.torch import Rearrange
 
 from vit import Transformer
 
@@ -37,6 +39,8 @@ class MAE(nn.Module):
         num_patches, encoder_dim = encoder.pos_embedding.shape[-2:]
         self.to_patch, self.patch_to_emb = encoder.to_patch_embedding[:2]
         pixel_values_per_patch = self.patch_to_emb.weight.shape[-1]
+        self.image_size = encoder.image_size
+        self.patch_size = encoder.patch_size
 
         # decoder parameters
         self.enc_to_dec = nn.Linear(encoder_dim, decoder_dim) if encoder_dim != decoder_dim else nn.Identity()
@@ -48,7 +52,10 @@ class MAE(nn.Module):
                                    mlp_dim=decoder_dim * 4)
         self.decoder_pos_emb = nn.Embedding(num_patches, decoder_dim)
         self.to_pixels = nn.Linear(decoder_dim, pixel_values_per_patch)
-
+        p1 = p2 = self.patch_size
+        h = self.image_size // p1
+        # print(p1, h)
+        self.to_image = Rearrange(' b (h w) (p1 p2 c) -> b c (h p1) (w p2)', p1=p1, p2=p2, h=h)
     def forward(self, img):
         # get patches
         patches = self.to_patch(img)
@@ -69,6 +76,7 @@ class MAE(nn.Module):
 
         # get the patches to be masked for the final reconstruction loss
         masked_patches = patches[batch_range, masked_indices]
+        unmasked_patches = patches[batch_range,unmasked_indices]
 
         # attend with vision transformer
         encoded_tokens = self.encoder.transformer(tokens)
@@ -87,10 +95,26 @@ class MAE(nn.Module):
         # splice out the mask tokens and project to pixel values
         mask_tokens = decoded_tokens[:, :num_masked]
         pred_pixel_values = self.to_pixels(mask_tokens)
+        pred_pixel_values_all = self.to_pixels(decoded_tokens)
 
         # calculate reconstruction loss
         recon_loss = F.mse_loss(pred_pixel_values, masked_patches)
-        return recon_loss
+        # full reconstructed image
+        pred_img = torch.zeros_like(patches)
+        pos =torch.cat((masked_indices,unmasked_indices),dim=1)
+        # print(pos.shape)
+        for r in range(batch): #batch size
+            for i,j in enumerate(pos[r]):
+                pred_img[r,j,:] = pred_pixel_values_all[r,i,:]
+
+        # recon_img = to_image(recon_img)
+        # orig_img = to_image(patches.clone())
+        mask = torch.zeros_like(patches)
+        mask[batch_range,masked_indices]=1
+        # mask[:,masked_indices,:] =1
+        mask = self.to_image(mask)
+        pred_img =self.to_image(pred_img)
+        return recon_loss,mask,pred_img
 
 
 class EvalNet(nn.Module):

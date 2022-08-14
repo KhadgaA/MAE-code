@@ -8,9 +8,13 @@ All rights reserved.
 import time
 import math
 import argparse
+
+import matplotlib.pyplot as plt
 import torch
+from tqdm import tqdm
 import tensorboard_logger
 
+from torch.utils.tensorboard import SummaryWriter
 from vit import ViT
 from model import MAE
 from util import *
@@ -80,7 +84,7 @@ def train(args):
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
 
     # tensorboard
-    tb_logger = tensorboard_logger.Logger(logdir=args.tb_folder, flush_secs=2)
+    writer = SummaryWriter(log_dir=args.tb_folder,flush_secs=2)
 
     for epoch in range(1, args.epochs + 1):
         # records
@@ -88,11 +92,23 @@ def train(args):
         losses = AverageMeter()
 
         # train by epoch
-        for idx, (images, targets) in enumerate(data_loader):
+        for idx, (images, targets) in enumerate(tqdm(data_loader,desc=f'epoch: {epoch}/{args.epochs}')):
             # put images into device
             images = images.to(args.device)
             # forward
-            loss = model(images)
+            loss,mask,pred_img = model(images)
+            augment_img = pred_img * mask  + images * (1 - mask)
+            if idx ==0:
+                # print(augment_img.shape)
+                fig,(ax1,ax2) = plt.subplots(1,2,sharey = True)
+                ax1.imshow(augment_img[0].detach().to(torch.device('cpu')).squeeze().permute(1,2,0))
+                ax1.set_title('augment img')
+                ax2.imshow(images[0].detach().to(torch.device('cpu')).squeeze().permute(1,2,0))
+                ax2.set_title('original img')
+                # plt.show()
+                writer.add_figure('MAE',fig,epoch)
+
+            # exit()
             # back propagation
             optimizer.zero_grad()
             loss.backward()
@@ -102,7 +118,7 @@ def train(args):
             losses.update(loss.item(), args.batch_size)
 
         # log
-        tb_logger.log_value('loss', losses.avg, epoch)
+        writer.add_scalar('loss',losses.avg,epoch)
 
         # print
         if epoch % args.print_freq == 0:
@@ -150,8 +166,8 @@ def default_args(data_name, trail=0):
     args.decoder_depth = 8  # paper showed good results with 8
 
     # train
-    args.batch_size = 4096//16
-    args.epochs = 800
+    args.batch_size = 4096//128
+    args.epochs = 1
     args.base_lr = 1.5e-4
     args.lr = args.base_lr * args.batch_size / 256
     args.weight_decay = 5e-2
@@ -163,7 +179,7 @@ def default_args(data_name, trail=0):
     args.warmup_to = eta_min + (args.lr - eta_min) * (1 + math.cos(math.pi * args.epochs_warmup / args.epochs)) / 2
 
     # print and save
-    args.print_freq = 5
+    args.print_freq = 1
     args.save_freq = 100
 
     # tensorboard
