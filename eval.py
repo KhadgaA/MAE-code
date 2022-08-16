@@ -106,7 +106,7 @@ def test(args, model=None, ckpt_path=None, data_loader=None):
             accs.update(acc, args.batch_size)
 
     return accs.avg
-def default_args(data_name, trail=0, ckpt_file='last.ckpt'):
+def default_args(opt, trail=0, ckpt_file='last.ckpt'):
     '''
     for default parameters. tune them upon your options
     :param data_name: dataset name, such as 'imagenet'
@@ -118,11 +118,11 @@ def default_args(data_name, trail=0, ckpt_file='last.ckpt'):
     args = argparse.ArgumentParser().parse_args()
 
     # device
-    args.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    args.device = torch.device(f'cuda:{opt.cudaid}' if torch.cuda.is_available() else 'cpu')
 
     # data
     args.data_dir = '../KDGen/data/'
-    args.data_name = data_name
+    args.data_name = opt.dataset
     args.image_size = 256
     args.n_worker = 2
 
@@ -170,8 +170,12 @@ def default_args(data_name, trail=0, ckpt_file='last.ckpt'):
     return args
 
 if __name__ == '__main__':
-
-    data_name = 'cifar10'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset', type=str, default='cifar10', help='dataset', choices=['cifar10', 'cifar100'])
+    parser.add_argument('--cudaid', type=int, default=0, help='cuda id')
+    parser.add_argument('--chkpt_path',type=str,default='ckpt/cifar10_0/last.ckpt',help='path to the saved chkpt')
+    opt = parser.parse_args()
+    # data_name = 'cifar10'
     # train(default_args(data_name))
     # model = build_model(default_args(data_name))
-    test(args=default_args(data_name),model=None,ckpt_path='ckpt/cifar10_0/last.ckpt',data_loader=None)
+    test(args=default_args(opt),model=None,ckpt_path=opt.chkpt_path,data_loader=None)

@@ -134,7 +134,7 @@ def train(args):
     save_ckpt(model, optimizer, args, epoch, save_file=save_file)
 
 
-def default_args(data_name, trail=0):
+def default_args(opt, trail=0):
     '''
     for default parameters. tune them upon your options
     :param data_name: dataset name, such as 'imagenet'
@@ -145,11 +145,11 @@ def default_args(data_name, trail=0):
     args = argparse.ArgumentParser().parse_args()
 
     # device
-    args.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    args.device = torch.device(f'cuda:{opt.cudaid}' if torch.cuda.is_available() else 'cpu')
 
     # data
     args.data_dir = '../KDGen/data/'
-    args.data_name = data_name
+    args.data_name = opt.dataset
     args.image_size = 256
     args.n_worker = 2
 
@@ -167,7 +167,7 @@ def default_args(data_name, trail=0):
 
     # train
     args.batch_size = 4096//128
-    args.epochs = 1
+    args.epochs = 100
     args.base_lr = 1.5e-4
     args.lr = args.base_lr * args.batch_size / 256
     args.weight_decay = 5e-2
@@ -196,6 +196,8 @@ def default_args(data_name, trail=0):
 
 
 if __name__ == '__main__':
-
-    data_name = 'cifar10'
-    train(default_args(data_name))
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset',type=str,default='cifar10',help='dataset',choices=['cifar10','cifar100'])
+    parser.add_argument('--cudaid', type=int, default=0, help='cuda id')
+    opt = parser.parse_args()
+    train(default_args(opt=opt))
